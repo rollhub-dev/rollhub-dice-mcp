@@ -3,9 +3,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import crypto from "node:crypto";
+import crypto, { createHash, createCipheriv } from "node:crypto";
 
-const BASE_URL = process.env.ROLLHUB_BASE_URL || "https://api.rollhub.com/api/v1";
+const BASE_URL = process.env.ROLLHUB_BASE_URL || "https://agent.rollhub.com/api/v1";
 const DEFAULT_API_KEY = process.env.ROLLHUB_API_KEY || "";
 
 async function api(
@@ -36,9 +36,62 @@ function resolveKey(provided?: string): string {
   return key;
 }
 
+// --- Provably fair verification ---
+
+function computeRoll(serverSeedHex: string, clientSeedHex: string, nonce: number): number {
+  const serverBytes = Buffer.from(serverSeedHex, 'hex');
+  const clientBytes = Buffer.from(clientSeedHex, 'hex');
+  const nonceBytes = Buffer.alloc(8);
+  nonceBytes.writeBigUInt64LE(BigInt(nonce));
+
+  const h = createHash('sha3-384');
+  h.update(serverBytes);
+  h.update(clientBytes);
+  h.update(nonceBytes);
+  const digest = h.digest();
+
+  const key = digest.subarray(0, 32);
+  const iv = digest.subarray(32, 48);
+
+  const cipher = createCipheriv('aes-256-ctr', key, iv);
+  const ct = cipher.update(Buffer.alloc(16));
+
+  let xor = 0;
+  for (let i = 0; i < 16; i += 4) {
+    xor ^= ct.readUInt32LE(i);
+  }
+
+  return 0.5 + xor / 4294967295;
+}
+
+function hashServerSeed(serverSeedHex: string): string {
+  return createHash('sha3-384').update(Buffer.from(serverSeedHex, 'hex')).digest('hex');
+}
+
+function verifyBetProof(data: {
+  server_seed: string;
+  server_seed_hash: string;
+  client_seed: string;
+  nonce: number;
+  roll: number;
+}) {
+  const computedHash = hashServerSeed(data.server_seed);
+  const hashOk = computedHash === data.server_seed_hash;
+  const rollRecalc = parseFloat(computeRoll(data.server_seed, data.client_seed, data.nonce).toFixed(6));
+  const rollReported = parseFloat(data.roll.toFixed(6));
+  const rollOk = rollRecalc === rollReported;
+  return {
+    verified: hashOk && rollOk,
+    hash_verified: hashOk,
+    roll_verified: rollOk,
+    roll_reported: rollReported,
+    roll_recalculated: rollRecalc,
+  };
+}
+
 const server = new McpServer({
   name: "rollhub-dice",
-  version: "0.1.0",
+  version: "0.2.0",
 });
 
 // --- Tools ---
@@ -77,11 +130,25 @@ server.tool(
   },
   async ({ api_key, target, direction, amount }) => {
     const client_secret = crypto.randomBytes(16).toString("hex");
-    const data = await api("/dice", {
+    const data = (await api("/dice", {
       method: "POST",
       apiKey: resolveKey(api_key),
       body: { target, direction, amount, client_secret },
-    });
+    })) as Record<string, unknown>;
+
+    // Auto-verify if proof contains server_seed
+    const proof = data.proof as Record<string, unknown> | undefined;
+    if (proof?.server_seed) {
+      const verification = verifyBetProof({
+        server_seed: proof.server_seed as string,
+        server_seed_hash: proof.server_seed_hash as string,
+        client_seed: (proof.client_seed as string) || client_secret,
+        nonce: proof.nonce as number,
+        roll: data.roll as number,
+      });
+      (data as Record<string, unknown>).verification = verification;
+    }
+
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   }
 );
@@ -98,10 +165,26 @@ server.tool(
 
 server.tool(
   "rollhub_verify",
-  "Verify that a bet was provably fair",
-  { bet_id: z.number().describe("Bet ID to verify") },
-  async ({ bet_id }) => {
-    const data = await api(`/verify/${bet_id}`);
+  "Verify that a bet was provably fair (fetches from server + client-side recomputation)",
+  {
+    bet_id: z.number().describe("Bet ID to verify"),
+    api_key: z.string().optional().describe("API key (uses ROLLHUB_API_KEY env if omitted)"),
+  },
+  async ({ bet_id, api_key }) => {
+    const data = (await api(`/verify/${bet_id}`, { apiKey: resolveKey(api_key) })) as Record<string, unknown>;
+    const proof = data.proof as Record<string, unknown> | undefined;
+
+    if (proof?.server_secret) {
+      const clientVerification = verifyBetProof({
+        server_seed: proof.server_secret as string,
+        server_seed_hash: proof.server_seed_hash as string,
+        client_seed: proof.client_seed as string,
+        nonce: proof.nonce as number,
+        roll: data.roll as number,
+      });
+      (data as Record<string, unknown>).client_verification = clientVerification;
+    }
+
     return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
   }
 );

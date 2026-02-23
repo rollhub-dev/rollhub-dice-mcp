@@ -1,0 +1,24 @@
+{
+  "name": "rollhub-dice-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for the Rollhub Dice API — let AI assistants place provably fair dice bets",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "rollhub-dice-mcp": "dist/index.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}

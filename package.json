@@ -1,7 +1,7 @@
 {
   "name": "rollhub-dice-mcp",
-  "version": "0.2.0",
-  "description": "MCP server for the Rollhub Dice API — let AI assistants place provably fair dice bets",
+  "version": "0.4.1",
+  "description": "MCP server casino for AI agents — provably fair dice gambling, crypto betting API, zero-trust verification. 99% RTP, 70+ chains.",
   "license": "MIT",
   "type": "module",
   "bin": {
@@ -15,6 +15,19 @@
     "dev": "tsc --watch",
     "start": "node dist/index.js"
   },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "casino",
+    "dice",
+    "ai-agent",
+    "rollhub",
+    "provably-fair",
+    "mcp-server-casino",
+    "ai-agent-gambling-api",
+    "crypto-betting-api",
+    "claude-desktop"
+  ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
     "zod": "^3.24.2"

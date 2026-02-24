@@ -1,8 +1,13 @@
 {
   "name": "rollhub-dice-mcp",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "MCP server casino for AI agents — provably fair dice gambling, crypto betting API, zero-trust verification. 99% RTP, 70+ chains.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Rollhub-app/rollhub-dice-mcp.git"
+  },
+  "homepage": "https://agent.rollhub.com",
   "type": "module",
   "bin": {
     "rollhub-dice-mcp": "dist/index.js"

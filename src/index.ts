@@ -264,6 +264,39 @@ server.tool(
 );
 
 server.tool(
+  "rollhub_roulette",
+  "Place a provably fair European roulette bet on Agent Casino. 37 numbers (0-36), multiple bet types. Natural 2.7% house edge from zero. Cryptographically verified.",
+  {
+    api_key: z.string().optional().describe("API key (uses ROLLHUB_API_KEY env if omitted)"),
+    bet_type: z.enum(["straight", "split", "street", "corner", "six_line", "dozen", "column", "red", "black", "odd", "even", "high", "low"]).describe("Bet type"),
+    bet_value: z.union([z.number(), z.string(), z.array(z.number())]).describe("Bet value — number for straight/street/six_line/dozen/column, string for red/black/odd/even/high/low, array for split/corner"),
+    amount: z.number().positive().describe("Bet amount in cents"),
+  },
+  async ({ api_key, bet_type, bet_value, amount }) => {
+    const client_seed = crypto.randomBytes(16).toString("hex");
+    const data = await api("/roulette/bet", {
+      method: "POST",
+      apiKey: resolveKey(api_key),
+      body: { bet_type, bet_value, amount, client_seed },
+    });
+    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+  }
+);
+
+server.tool(
+  "rollhub_roulette_verify",
+  "Verify a roulette bet was provably fair.",
+  {
+    bet_id: z.number().describe("Roulette bet ID to verify"),
+    api_key: z.string().optional().describe("API key (uses ROLLHUB_API_KEY env if omitted)"),
+  },
+  async ({ bet_id, api_key }) => {
+    const data = await api(`/roulette/verify/${bet_id}`, { apiKey: resolveKey(api_key) });
+    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+  }
+);
+
+server.tool(
   "rollhub_games",
   "List available games on Agent Casino — dice, coinflip, and more.",
   {
